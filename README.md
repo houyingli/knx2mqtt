@@ -126,8 +126,9 @@ When running knx2mqtt on a server class machine, it makes sense to limit the mem
 to 128MB using the java options
 
     -Xmx128M
-    
-
+usage:
+gradle clean build
+java -jar ./build/libs/knx2mqtt.jar knx.ip=192.168.3.101 knx.localip=192.168.3.8 knx.ets5projectfile=./knx_sw_dim.knxproj mqtt.server=tcp://192.168.3.10:1883
 See also
 --------
 - Project overview: https://github.com/mqtt-smarthome
