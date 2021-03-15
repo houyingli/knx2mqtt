@@ -7,7 +7,9 @@ import com.tellerulam.knx2mqtt.GroupAddressManager.GroupAddressInfo;
 
 import tuwien.auto.calimero.*;
 import tuwien.auto.calimero.dptxlator.*;
-import tuwien.auto.calimero.exception.*;
+//import tuwien.auto.calimero.exception.*;
+//import tuwien.auto.calimero.exception.KNXException;
+import tuwien.auto.calimero.KNXException;
 import tuwien.auto.calimero.knxnetip.*;
 import tuwien.auto.calimero.link.*;
 import tuwien.auto.calimero.link.medium.*;
@@ -22,14 +24,17 @@ public class KNXConnector extends Thread implements NetworkLinkListener
 
 	public void connect() throws KNXException, InterruptedException
 	{
-		int knxConnectionType=KNXNetworkLinkIP.TUNNELING;
+		//int knxConnectionType=KNXNetworkLinkIP.TUNNELING;
+		int knxConnectionType=1;
 		String connType=System.getProperty("knx2mqtt.knx.type");
 		if(connType!=null)
 		{
 			if("TUNNELING".equals(connType))
-				knxConnectionType=KNXNetworkLinkIP.TUNNELING;
+				//knxConnectionType=KNXNetworkLinkIP.TUNNELING;
+				knxConnectionType=1;
 			else if("ROUTING".equals(connType))
-				knxConnectionType=KNXNetworkLinkIP.ROUTING;
+				//knxConnectionType=KNXNetworkLinkIP.ROUTING;
+				knxConnectionType=2;
 			else if("SERIAL".equals(connType))
 			{
 				connectSerial();
@@ -48,6 +53,15 @@ public class KNXConnector extends Thread implements NetworkLinkListener
 		pc.addProcessListener(processListener);
 	}
 
+	static InetAddress parseHost(final String host)
+	{
+		try {
+			return InetAddress.getByName(host);
+		}
+		catch (final UnknownHostException e) {
+			throw new KNXIllegalArgumentException("failed to read IP host " + host, e);
+		}
+	}
 	private void connectIP(int knxConnectionType) throws KNXException, InterruptedException
 	{
 		String hostIP=System.getProperty("knx2mqtt.knx.ip","setme");
@@ -72,8 +86,17 @@ public class KNXConnector extends Thread implements NetworkLinkListener
 			}
 			local=new InetSocketAddress(localhost,0);
 		}
-		L.log(Level.INFO,"Establishing KNX IP connection to "+hostIP+":"+port+" ("+(knxConnectionType==KNXNetworkLinkIP.TUNNELING?"TUNNEL":"ROUTER")+") from "+local);
-		link=new KNXNetworkLinkIP(knxConnectionType, local, new InetSocketAddress(hostIP, port), false, TPSettings.TP1);
+		L.log(Level.INFO,"Establishing KNX IP connection to "+hostIP+":"+port+" ("+(knxConnectionType==1?"TUNNEL":"ROUTER")+") from "+local);
+		//link=new KNXNetworkLinkIP(knxConnectionType, local, new InetSocketAddress(hostIP, port), false, TPSettings.TP1);
+		if(knxConnectionType == 1)
+		{
+			link =  KNXNetworkLinkIP.newTunnelingLink( local, new InetSocketAddress(hostIP, port), false, TPSettings.TP1);
+		}
+		else
+		{
+			link =  KNXNetworkLinkIP.newRoutingLink(local.getAddress(), parseHost(hostIP), TPSettings.TP1);
+		}
+
 		L.info("KNX IP Connection established");
 	}
 
@@ -101,19 +124,26 @@ public class KNXConnector extends Thread implements NetworkLinkListener
 		/* Ignore */
 	}
 
-	private class MyProcessListener extends ProcessListenerEx
+	//private class MyProcessListener extends ProcessListenerEx
+	private class MyProcessListener implements ProcessListener
 	{
 		@Override
 		public void groupWrite(ProcessEvent pe)
 		{
 			GroupAddress dest=pe.getDestination();
 			IndividualAddress src=pe.getSourceAddr();
+
+			if(!dest.toString().equals("11/0/0")){
+				return;
+			}
+
 			byte[] asdu=pe.getASDU();
 			if(asdu.length==0)
 			{
 				L.info("Zero-length write to "+dest+" from "+src);
 				return;
 			}
+
 
 			GroupAddressInfo gaInfo=GroupAddressManager.getGAInfoForAddress(dest.toString());
 
@@ -127,12 +157,12 @@ public class KNXConnector extends Thread implements NetworkLinkListener
 					String dpt;
 					if(asdu.length==1)
 					{
-						val=Integer.valueOf(asUnsigned(pe, ProcessCommunicationBase.UNSCALED));
+						val=Integer.valueOf(ProcessListener.asUnsigned(pe, ProcessCommunicationBase.UNSCALED));
 						dpt="5.004";
 					}
 					else if(asdu.length==2)
 					{
-						val=Double.valueOf(asFloat(pe,false));
+						val=Double.valueOf(ProcessListener.asFloat(pe));
 						dpt="9.001";
 					}
 					else
@@ -248,15 +278,37 @@ public class KNXConnector extends Thread implements NetworkLinkListener
 			// We do special handling for booleans
 			if(gai.xlator instanceof DPTXlatorBoolean)
 			{
-				if("0".equals(val))
-					((DPTXlatorBoolean)gai.xlator).setValue(false);
-				else if("1".equals(val))
-					((DPTXlatorBoolean)gai.xlator).setValue(true);
-				else
+				if("0".equals(val)) {
+					conn.L.info("#############  bool set false ############### " + val);
+					((DPTXlatorBoolean) gai.xlator).setValue(false);
+				}
+				else if("1".equals(val)) {
+					conn.L.info("#############  bool set true ############### " + val);
+					((DPTXlatorBoolean) gai.xlator).setValue(true);
+				}
+				else {
+					conn.L.info("#############  bool not 0 not 1 ############### " + val);
 					gai.xlator.setValue(val);
+				}
 			}
-			else
+			else {
+				conn.L.info("############# not bool ############### " + val);
 				gai.xlator.setValue(val);
+			}
+			//DPTXlator3BitControlled val2 = new DPTXlator3BitControlled(DPTXlator3BitControlled.DPT_CONTROL_DIMMING);
+			//val2.setValue(true, 3);
+
+			//DPTXlatorBoolean val2 = new DPTXlatorBoolean(DPTXlatorBoolean.DPT_HEAT_COOL);
+			//val2.setValue(true);
+			//DPTXlator2ByteUnsigned val2 = new DPTXlator2ByteUnsigned(DPTXlator2ByteUnsigned.DPT_VALUE_2_UCOUNT);
+			//DPTXlator2ByteFloat val2 = new DPTXlator2ByteFloat(DPTXlator2ByteFloat.DPT_TEMPERATURE);
+			//DPTXlator2ByteUnsigned val2 = new DPTXlator2ByteUnsigned(DPTXlator2ByteFloat.DPT_TEMPERATURE);
+			//DPTXlator8BitUnsigned val2 = new DPTXlator8BitUnsigned(DPTXlator8BitUnsigned.DPT_VALUE_1_UCOUNT);
+			//val2.setValue(1);
+
+			System.out.println("xlator: " + gai.xlator.getClass().getSimpleName() + " dpt:" +  gai.xlator.getType() + "val:" +val);
+
+			//conn.link.sendRequestWait(ga, Priority.LOW, createGroupAPDU(GROUP_WRITE, val2));
 			conn.link.sendRequestWait(ga, Priority.LOW, createGroupAPDU(GROUP_WRITE, gai.xlator));
 		}
 		catch(Exception e)

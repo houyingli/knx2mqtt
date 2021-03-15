@@ -3,8 +3,8 @@ version = '0.12'
 apply plugin: 'java'
 apply plugin: 'eclipse'
 
-sourceCompatibility = 1.7
-targetCompatibility = 1.7
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
 
 repositories {
 	mavenCentral()
@@ -16,10 +16,10 @@ repositories {
 dependencies {
 	compile 'com.eclipsesource.minimal-json:minimal-json:0.9.4'
 	compile 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.0.2'
-	compile 'com.github.calimero:calimero-core:2.2.1'
+	compile 'com.github.calimero:calimero-core:2.4'
 }
 
-task listJars << {
+task listJars {
     configurations.compile.each { File file -> println file.name }
 }
 

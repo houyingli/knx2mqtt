@@ -15,7 +15,10 @@ import org.xml.sax.helpers.*;
 
 import tuwien.auto.calimero.*;
 import tuwien.auto.calimero.dptxlator.*;
-import tuwien.auto.calimero.exception.*;
+//import tuwien.auto.calimero.exception.*;
+import tuwien.auto.calimero.KNXException;
+
+
 
 public class GroupAddressManager
 {
